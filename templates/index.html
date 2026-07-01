@@ -1100,6 +1100,19 @@
             // First, initialize rawEvents with the complete stable fallback dataset containing all 32 teams
             rawEvents = /*INLINED_DATA_FALLBACK*/ [];
 
+            // If rawEvents is empty (running templates/index.html locally under Flask), fetch from Flask's API
+            if (!rawEvents || rawEvents.length === 0) {
+                try {
+                    const localRes = await fetch('/api/data');
+                    if (localRes.ok) {
+                        rawEvents = await localRes.json();
+                        console.log("Successfully loaded complete baseline match data from local Flask API!");
+                    }
+                } catch (localErr) {
+                    console.log("Not running local Flask server or /api/data unavailable.");
+                }
+            }
+
             try {
                 // Try fetching live active scoring matches from ESPN's daily feed
                 const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
