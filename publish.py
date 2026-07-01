@@ -3,10 +3,10 @@ import json
 import shutil
 
 def build():
-    # 1. Create dist directory
-    dist_dir = "dist"
+    # 1. Create docs directory
+    dist_dir = "docs"
     os.makedirs(dist_dir, exist_ok=True)
-    print("Creating 'dist' folder...")
+    print("Creating 'docs' folder...")
 
     # 2. Process scoreboard.json exactly like app.py
     try:
@@ -85,26 +85,30 @@ def build():
             print("Error: Could not locate loadRealTimeData function in HTML!")
             return
 
-    # 5. Write compiled HTML to dist/index.html
+    # 5. Write compiled HTML to docs/index.html
     with open(os.path.join(dist_dir, "index.html"), "w") as f:
         f.write(html)
-    print("Wrote compiled HTML to dist/index.html")
+    print("Wrote compiled HTML to docs/index.html")
 
     # 6. Copy assets
     if os.path.exists("holland_lop.jpg"):
         shutil.copy("holland_lop.jpg", os.path.join(dist_dir, "holland_lop.jpg"))
-        print("Copied holland_lop.jpg to dist/ folder.")
+        print("Copied holland_lop.jpg to docs/ folder.")
+
+    # 7. Create .nojekyll to prevent Jekyll build failures
+    with open(os.path.join(dist_dir, ".nojekyll"), "w") as f:
+        f.write("")
+    print("Created .nojekyll file in docs/ folder.")
 
     print("\n=======================================================")
-    print("SUCCESS: Your fully static site is built inside 'dist/'!")
+    print("SUCCESS: Your fully static site is built inside 'docs/'!")
     print("=======================================================")
     print("This folder now contains everything you need to run serverless:")
     print("  - index.html (with scoreboard data completely inlined)")
     print("  - holland_lop.jpg (local custom icon)")
     print("\nTo deploy this directly to GitHub Pages:")
-    print("1. Initialize git in the 'dist' folder and push to a 'gh-pages' branch, OR")
-    print("2. Commit the 'dist' folder to your main repository and configure your GitHub repository")
-    print("   settings to serve pages from the '/dist' directory on the 'main' branch.")
+    print("1. Commit the 'docs' folder to your main repository and configure your GitHub repository")
+    print("   settings to serve pages from the '/docs' directory on the 'main' branch.")
     print("=======================================================")
 
 if __name__ == "__main__":
