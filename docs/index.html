@@ -842,6 +842,110 @@
         let bracketSpeed = 0.08; // Whole Bracket degrees per frame (slow)
         let bracketDirection = -1; // Whole Bracket direction (1 = CW, -1 = CCW)
 
+        // Mobile-only Roulette drag/spin state
+        let isSpinningMobile = false;
+        let mobileStartTouchAngle = 0;
+        let mobileStartBracketAngle = 0;
+        let touchHistory = []; // stores { time, angle } for velocity calculation
+
+        function handleMobileTouchStart(e) {
+            if (window.innerWidth > 768) return;
+            if (e.touches.length !== 1) return;
+            
+            const touch = e.touches[0];
+            const svgEl = document.getElementById('bracket-svg');
+            if (!svgEl) return;
+            
+            const rect = svgEl.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const dx = touch.clientX - centerX;
+            const dy = touch.clientY - centerY;
+            
+            mobileStartTouchAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+            mobileStartBracketAngle = bracketAngle;
+            isSpinningMobile = true;
+            touchHistory = [{
+                time: performance.now(),
+                angle: bracketAngle
+            }];
+            
+            e.preventDefault();
+        }
+
+        function handleMobileTouchMove(e) {
+            if (window.innerWidth > 768 || !isSpinningMobile) return;
+            if (e.touches.length !== 1) return;
+            
+            const touch = e.touches[0];
+            const svgEl = document.getElementById('bracket-svg');
+            if (!svgEl) return;
+            
+            const rect = svgEl.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const dx = touch.clientX - centerX;
+            const dy = touch.clientY - centerY;
+            
+            const currentTouchAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+            let deltaAngle = currentTouchAngle - mobileStartTouchAngle;
+            
+            bracketAngle = mobileStartBracketAngle + deltaAngle;
+            if (bracketAngle >= 360) bracketAngle -= 360;
+            if (bracketAngle < 0) bracketAngle += 360;
+            
+            const bracketRoot = document.getElementById('bracket-root');
+            if (bracketRoot) {
+                bracketRoot.setAttribute('transform', `rotate(${bracketAngle}, 500, 500)`);
+            }
+            
+            const now = performance.now();
+            touchHistory.push({
+                time: now,
+                angle: bracketAngle
+            });
+            
+            if (touchHistory.length > 5) {
+                touchHistory.shift();
+            }
+            
+            e.preventDefault();
+        }
+
+        function handleMobileTouchEnd(e) {
+            if (window.innerWidth > 768 || !isSpinningMobile) return;
+            isSpinningMobile = false;
+            
+            if (touchHistory.length >= 2) {
+                const startPoint = touchHistory[0];
+                const endPoint = touchHistory[touchHistory.length - 1];
+                const dt = endPoint.time - startPoint.time;
+                if (dt > 10) {
+                    let dAngle = endPoint.angle - startPoint.angle;
+                    
+                    // Normalize delta angle difference for wrapping
+                    if (dAngle > 180) dAngle -= 360;
+                    if (dAngle < -180) dAngle += 360;
+                    
+                    const degPerMs = dAngle / dt;
+                    const velocity = degPerMs * 16.67;
+                    
+                    const maxVel = 25; // Increase maximum velocity for super fast spinning!
+                    const minVel = -25;
+                    const cappedVelocity = Math.max(minVel, Math.min(maxVel, velocity));
+                    
+                    bracketSpeed = Math.abs(cappedVelocity);
+                    bracketDirection = cappedVelocity >= 0 ? 1 : -1;
+                } else {
+                    bracketSpeed = 0;
+                }
+            } else {
+                bracketSpeed = 0;
+            }
+        }
+
         function animateCoin() {
             // 1. Center Cup Rotation
             coinAngle += coinSpeed * coinDirection;
@@ -854,7 +958,15 @@
             }
 
             // 2. Whole Bracket Rotation
-            bracketAngle += bracketSpeed * bracketDirection;
+            if (window.innerWidth <= 768) {
+                if (!isSpinningMobile) {
+                    bracketAngle += bracketSpeed * bracketDirection;
+                    bracketSpeed *= 0.985; // Natural decay friction
+                    if (bracketSpeed < 0.01) bracketSpeed = 0;
+                }
+            } else {
+                bracketAngle += bracketSpeed * bracketDirection;
+            }
             if (bracketAngle >= 360) bracketAngle -= 360;
             if (bracketAngle < 0) bracketAngle += 360;
 
@@ -926,6 +1038,14 @@
             // Start continuous buttery-smooth commemorative coin rotation loop!
             animateCoin();
             updateCoinRotation(); // Initialize label and speed matching the slider
+
+            // Add mobile roulette touch listeners
+            const svgEl = document.getElementById('bracket-svg');
+            if (svgEl) {
+                svgEl.addEventListener('touchstart', handleMobileTouchStart, { passive: false });
+                svgEl.addEventListener('touchmove', handleMobileTouchMove, { passive: false });
+                svgEl.addEventListener('touchend', handleMobileTouchEnd, { passive: false });
+            }
         }
 
         // Map raw ESPN API response structure to our clean simplified format client-side
