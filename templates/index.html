@@ -960,9 +960,16 @@
             // 2. Whole Bracket Rotation
             if (window.innerWidth <= 768) {
                 if (!isSpinningMobile) {
+                    let currentVelocity = bracketSpeed * bracketDirection;
+                    const targetVelocity = -0.08; // Normal slow CCW rotation speed
+                    
+                    // Smoothly interpolate current velocity back to the default idle velocity
+                    currentVelocity = targetVelocity + (currentVelocity - targetVelocity) * 0.985;
+                    
+                    bracketSpeed = Math.abs(currentVelocity);
+                    bracketDirection = currentVelocity >= 0 ? 1 : -1;
+                    
                     bracketAngle += bracketSpeed * bracketDirection;
-                    bracketSpeed *= 0.985; // Natural decay friction
-                    if (bracketSpeed < 0.01) bracketSpeed = 0;
                 }
             } else {
                 bracketAngle += bracketSpeed * bracketDirection;
