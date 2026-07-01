@@ -1167,7 +1167,7 @@
 
             const groups = {};
             rawEvents.filter(e => e.stage === 'group-stage').forEach(e => {
-                const groupName = e.note ? e.note.replace('FIFA World Cup, ', '') : 'Group Stage';
+                const groupName = e.note ? e.note.replace('FeeFa Gorg Cup, ', '') : 'Group Stage';
                 if (!groups[groupName]) groups[groupName] = [];
                 groups[groupName].push(e);
             });
