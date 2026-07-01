@@ -852,6 +852,11 @@
             if (window.innerWidth > 768) return;
             if (e.touches.length !== 1) return;
             
+            // If tapping a team flag or image, do not intercept or spin the roulette wheel
+            if (e.target.tagName === 'image' || e.target.closest('.team-flag-group')) {
+                return;
+            }
+            
             const touch = e.touches[0];
             const svgEl = document.getElementById('bracket-svg');
             if (!svgEl) return;
