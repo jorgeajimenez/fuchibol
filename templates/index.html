@@ -502,9 +502,13 @@
         }
 
         /* Mobile responsive notice & adaptations */
+        .mobile-info-btn {
+            display: none;
+        }
+
         .mobile-notice {
             display: none;
-            background: rgba(22, 27, 34, 0.9);
+            background: rgba(22, 27, 34, 0.95);
             border: 1px solid var(--accent-gold);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -516,9 +520,9 @@
             text-align: center;
             z-index: 1000;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 175, 55, 0.25);
-            pointer-events: none;
             max-width: 90%;
             margin: 0 auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .mobile-notice span {
@@ -530,12 +534,47 @@
             .sidebar {
                 display: none !important;
             }
+            .mobile-info-btn {
+                display: flex;
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                background: rgba(22, 27, 34, 0.9);
+                border: 1px solid var(--accent-gold);
+                color: var(--accent-gold);
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 1rem;
+                font-weight: bold;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                z-index: 1001;
+                box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+                pointer-events: auto;
+                transition: all 0.2s ease;
+            }
+            .mobile-info-btn:active {
+                transform: scale(0.9);
+                background: var(--accent-gold);
+                color: #030406;
+            }
             .mobile-notice {
                 display: block;
                 position: absolute;
-                top: 85px;
-                left: 0;
-                right: 0;
+                top: 60px;
+                right: 15px;
+                max-width: 250px;
+                opacity: 0;
+                transform: translateY(-10px);
+                pointer-events: none;
+            }
+            .mobile-notice.active {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
             }
             body {
                 overflow: hidden;
@@ -590,7 +629,8 @@
     </header>
 
     <div class="workspace">
-        <div class="mobile-notice">
+        <div class="mobile-info-btn" onclick="document.getElementById('mobile-notice').classList.toggle('active')">i</div>
+        <div id="mobile-notice" class="mobile-notice">
             📱 For the full interactive circular predictor experience, please visit on <span>desktop</span>.
         </div>
         <!-- Circular Bracket Main View -->
