@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FeeFa Gorg Cup 2026 - Circular Bracket Predictor</title>
+    <title>Fuchibol Cup 2026 - Circular Bracket Predictor</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -507,7 +507,7 @@
     <header>
         <div class="logo-section">
             <div>
-                <h1>FEEFA GORG CUP <span>2026</span></h1>
+                <h1>FUCHIBOL CUP <span>2026</span></h1>
                 <div class="subtitle">Circular Live Bracket & Predictor</div>
             </div>
         </div>
@@ -1167,7 +1167,7 @@
 
             const groups = {};
             rawEvents.filter(e => e.stage === 'group-stage').forEach(e => {
-                const groupName = e.note ? e.note.replace('FeeFa Gorg Cup, ', '') : 'Group Stage';
+                const groupName = e.note ? e.note.replace('Fuchibol Cup, ', '') : 'Group Stage';
                 if (!groups[groupName]) groups[groupName] = [];
                 groups[groupName].push(e);
             });

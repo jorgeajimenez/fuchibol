@@ -36,9 +36,9 @@ def build():
                 "winner": competitor.get("winner", False)
             })
         note = comp.get("altGameNote") or ""
-        note = note.replace("FIFA World Cup", "FeeFa Gorg Cup")
+        note = note.replace("FIFA World Cup", "Fuchibol Cup")
         name = event.get("name") or ""
-        name = name.replace("FIFA World Cup", "FeeFa Gorg Cup")
+        name = name.replace("FIFA World Cup", "Fuchibol Cup")
 
         events.append({
             "id": event.get("id"),

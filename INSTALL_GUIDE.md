@@ -1,4 +1,4 @@
-# FeeFa Gorg Cup 2026 - Circular Bracket Predictor
+# Fuchibol Cup 2026 - Circular Bracket Predictor
 
 A highly-premium, state-of-the-art Flask application featuring an interactive circular knockout bracket predictor (inspired by Sport Bible's design) alongside a classic group stage scoreboard visualizer.
 
