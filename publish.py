@@ -62,18 +62,14 @@ def build():
     json_string = json.dumps(events, indent=2)
     
     # Exact target match for replacement from templates/index.html
-    target_fetch = """                const res = await fetch('/api/data');
-                rawEvents = await res.json();"""
-    
-    replacement = f"""                // Inlined static data for serverless GitHub Pages hosting
-                rawEvents = {json_string};"""
+    target_fetch = "rawEvents = /*INLINED_DATA_FALLBACK*/ [];"
+    replacement = f"rawEvents = /*INLINED_DATA_FALLBACK*/ {json_string};"
 
     if target_fetch in html:
         html = html.replace(target_fetch, replacement)
-        print("Successfully inlined scoreboard data into index.html!")
+        print("Successfully inlined fallback scoreboard data into index.html!")
     else:
-        # Fallback if whitespace differs
-        print("Warning: Could not match exact fetch pattern. Performing flexible fallback...")
+        print("Warning: Could not match exact fallback placeholder. Performing flexible fallback...")
         target_marker = "async function loadRealTimeData() {"
         if target_marker in html:
             html = html.replace(

@@ -928,12 +928,65 @@
             updateCoinRotation(); // Initialize label and speed matching the slider
         }
 
+        // Map raw ESPN API response structure to our clean simplified format client-side
+        function mapEspnToEvents(espnData) {
+            const events = [];
+            (espnData.events || []).forEach(event => {
+                const comp = (event.competitions || [{}])[0];
+                const status = event.status?.type?.name || "STATUS_SCHEDULED";
+                const teams = [];
+                (comp.competitors || []).forEach(competitor => {
+                    const teamInfo = competitor.team || {};
+                    let logo = teamInfo.logo;
+                    if (teamInfo.displayName === "Netherlands" || teamInfo.abbreviation === "NED" || teamInfo.id === "449") {
+                        logo = "holland_lop.jpg";
+                    }
+                    teams.push({
+                        id: teamInfo.id,
+                        name: teamInfo.displayName,
+                        abbr: teamInfo.abbreviation,
+                        logo: logo,
+                        score: competitor.score,
+                        winner: competitor.winner || false
+                    });
+                });
+                let note = comp.altGameNote || "";
+                note = note.replaceAll("FIFA World Cup", "Fuchibol Cup");
+                let name = event.name || "";
+                name = name.replaceAll("FIFA World Cup", "Fuchibol Cup");
+
+                events.push({
+                    id: event.id,
+                    name: name,
+                    stage: event.season?.slug,
+                    status: status,
+                    note: note,
+                    date: event.date,
+                    teams: teams
+                });
+            });
+            return events;
+        }
+
         // Fetch real data from the API and map it onto the bracket state
         async function loadRealTimeData() {
             try {
-                const res = await fetch('/api/data');
-                rawEvents = await res.json();
+                // Try fetching live ESPN scoring data directly inside the user's browser!
+                const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
+                if (res.ok) {
+                    const espnData = await res.json();
+                    rawEvents = mapEspnToEvents(espnData);
+                    console.log("Loaded fresh real-time tournament data from ESPN API!");
+                } else {
+                    throw new Error("ESPN fetch failed");
+                }
+            } catch (err) {
+                console.warn("Could not fetch live ESPN data, falling back to inlined snapshot:", err);
+                // Fallback placeholder that publish.py will replace with inlined JSON
+                rawEvents = /*INLINED_DATA_FALLBACK*/ [];
+            }
 
+            try {
                 // 1. Extract Round of 32 Matches
                 const allR32 = rawEvents.filter(e => e.stage === 'round-of-32');
                 
@@ -976,7 +1029,7 @@
                 });
 
             } catch (err) {
-                console.error("Error fetching live scoreboard data:", err);
+                console.error("Error processing scoreboard data:", err);
             }
         }
 
