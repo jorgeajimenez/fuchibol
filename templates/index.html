@@ -970,20 +970,29 @@
 
         // Fetch real data from the API and map it onto the bracket state
         async function loadRealTimeData() {
+            // First, initialize rawEvents with the complete stable fallback dataset containing all 32 teams
+            rawEvents = /*INLINED_DATA_FALLBACK*/ [];
+
             try {
-                // Try fetching live ESPN scoring data directly inside the user's browser!
+                // Try fetching live active scoring matches from ESPN's daily feed
                 const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
                 if (res.ok) {
                     const espnData = await res.json();
-                    rawEvents = mapEspnToEvents(espnData);
-                    console.log("Loaded fresh real-time tournament data from ESPN API!");
-                } else {
-                    throw new Error("ESPN fetch failed");
+                    const liveEvents = mapEspnToEvents(espnData);
+                    
+                    // Merge active live matches into our full stable dataset
+                    liveEvents.forEach(liveEvent => {
+                        const existingIdx = rawEvents.findIndex(e => e.id === liveEvent.id);
+                        if (existingIdx !== -1) {
+                            rawEvents[existingIdx] = liveEvent;
+                        } else {
+                            rawEvents.push(liveEvent);
+                        }
+                    });
+                    console.log("Successfully merged fresh real-time active match data from ESPN!");
                 }
             } catch (err) {
-                console.warn("Could not fetch live ESPN data, falling back to inlined snapshot:", err);
-                // Fallback placeholder that publish.py will replace with inlined JSON
-                rawEvents = /*INLINED_DATA_FALLBACK*/ [];
+                console.warn("Could not fetch live ESPN data, using full offline snapshot:", err);
             }
 
             try {
