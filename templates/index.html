@@ -1119,8 +1119,8 @@
             }
 
             try {
-                // Try fetching live active scoring matches from ESPN's daily feed
-                const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
+                // Try fetching live active scoring matches from ESPN's complete tournament date-range feed
+                const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=1000');
                 if (res.ok) {
                     const espnData = await res.json();
                     const liveEvents = mapEspnToEvents(espnData);
@@ -1353,10 +1353,18 @@
             updatePathHighlights();
         }
 
-        // Advance clicked team to the next round
+        // Advance clicked team to the next round, or undo prediction if clicked on already advanced node
         function advanceTeam(round, index) {
             const team = bracketState[`round${round}`][index];
             if (!team) return;
+
+            // Undo/Clear Selection if clicking on an already predicted slot (round > 0)
+            if (round > 0) {
+                clearForwardProgress(round, index);
+                bracketState[`round${round}`][index] = null;
+                renderCircularBracket();
+                return;
+            }
 
             if (round === 4) {
                 bracketState.champion = team;
