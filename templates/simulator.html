@@ -1147,7 +1147,7 @@
                 </div>
                 <div class="input-group" id="home-custom-name-group" style="display: none;">
                     <label>Custom Name</label>
-                    <input type="text" id="home-name-input" value="Home United" placeholder="Enter Team Name">
+                    <input type="text" id="home-name-input" value="Home United" placeholder="Enter Team Name" oninput="updateCustomTeamName('home', this.value)">
                 </div>
                 
                 <div class="input-group">
@@ -1212,7 +1212,7 @@
                 </div>
                 <div class="input-group" id="away-custom-name-group" style="display: none;">
                     <label>Custom Name</label>
-                    <input type="text" id="away-name-input" value="Away FC" placeholder="Enter Team Name">
+                    <input type="text" id="away-name-input" value="Away FC" placeholder="Enter Team Name" oninput="updateCustomTeamName('away', this.value)">
                 </div>
 
                 <div class="input-group">
@@ -1707,14 +1707,14 @@
             ]
         };
 
-        function renderPitchPlayers(side, teamId) {
+        function renderPitchPlayers(side, teamId, logoUrl) {
             // Remove existing pins for this side
             document.querySelectorAll(`.pitch-player.${side}-pin-dynamic`).forEach(el => el.remove());
 
-            const roster = playersDb[teamId] || [];
+            const roster = (playersDb && teamId) ? (playersDb[teamId] || []) : [];
             const formation = TEAM_FORMATIONS[side];
             const pitchContainer = document.querySelector('.pitch-container');
-            const teamAbbr = document.getElementById(`${side}-abbr`).textContent;
+            const teamAbbr = document.getElementById(`${side}-abbr`).textContent || side.toUpperCase();
 
             formation.forEach((fPos, idx) => {
                 const playerEl = document.createElement('div');
@@ -1741,6 +1741,20 @@
                 // Style/position initially
                 playerEl.style.top = `${fPos.top}%`;
                 playerEl.style.left = `${fPos.left}%`;
+                
+                // Set mini-flag background
+                if (logoUrl) {
+                    playerEl.style.backgroundImage = `url(${logoUrl})`;
+                    playerEl.style.backgroundSize = 'cover';
+                    playerEl.style.backgroundPosition = 'center';
+                    playerEl.style.borderColor = side === 'home' ? 'var(--info-blue)' : 'var(--danger-red)';
+                    playerEl.style.borderWidth = '2px';
+                    playerEl.style.borderStyle = 'solid';
+                    playerEl.style.textShadow = '0 0 3px black, 0 0 3px black, 0 0 3px black';
+                } else {
+                    playerEl.style.backgroundImage = 'none';
+                    playerEl.style.backgroundColor = side === 'home' ? 'var(--info-blue)' : 'var(--danger-red)';
+                }
                 
                 // Save base coordinates on the element for animation
                 playerEl.dataset.baseTop = fPos.top;
@@ -1839,6 +1853,16 @@
 
                 loadTeamPreset('home');
                 loadTeamPreset('away');
+
+                // Start continuous visual animation loop so players bounce and shift smoothly
+                function startVisualAnimationLoop() {
+                    function tick() {
+                        animatePlayersOnPitch();
+                        requestAnimationFrame(tick);
+                    }
+                    requestAnimationFrame(tick);
+                }
+                startVisualAnimationLoop();
             })
             .catch(err => {
                 console.error("Failed to fetch full tournament database, loading offline backups", err);
@@ -1885,6 +1909,23 @@
             loadTeamPreset('away');
         }
 
+        // Real-time custom name updates
+        function updateCustomTeamName(side, val) {
+            const defaultName = side === 'home' ? 'Home United' : 'Away FC';
+            const defaultAbbr = side === 'home' ? 'HOME' : 'AWAY';
+            const name = val.trim() || defaultName;
+            const abbr = name.substring(0, 3).toUpperCase();
+
+            document.getElementById(`${side}-name`).textContent = name;
+            document.getElementById(`${side}-abbr`).textContent = abbr;
+
+            const customLogo = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%231e293b'/><text x='50' y='55' fill='white' font-size='12' text-anchor='middle' font-family='sans-serif'>" + abbr + "</text></svg>";
+            document.getElementById(`${side}-logo`).src = customLogo;
+            
+            renderPitchPlayers(side, 'custom', customLogo);
+            updateH2H();
+        }
+
         // Presets loader
         function loadTeamPreset(side) {
             const select = document.getElementById(`${side}-select`);
@@ -1892,12 +1933,8 @@
             
             if (select.value === 'custom') {
                 customGroup.style.display = 'flex';
-                document.getElementById(`${side}-name`).textContent = side === 'home' ? 'Home United' : 'Away FC';
-                document.getElementById(`${side}-abbr`).textContent = side === 'home' ? 'HOME' : 'AWAY';
-                document.getElementById(`${side}-logo`).src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%231e293b'/><text x='50' y='55' fill='white' font-size='12' text-anchor='middle' font-family='sans-serif'>" + side.toUpperCase() + "</text></svg>";
-                document.getElementById(`${side}-roster-count`).textContent = "0 Players";
-                document.getElementById(`${side}-roster-list`).innerHTML = `<div style="color: var(--text-dim); text-align: center; font-style: italic;">No players loaded</div>`;
-                updateH2H();
+                const inputVal = document.getElementById(`${side}-name-input`).value;
+                updateCustomTeamName(side, inputVal);
                 return;
             }
 
@@ -1906,7 +1943,9 @@
             if (team) {
                 document.getElementById(`${side}-name`).textContent = team.name;
                 document.getElementById(`${side}-abbr`).textContent = team.abbr || team.name.substring(0,3).toUpperCase();
-                document.getElementById(`${side}-logo`).src = team.logo || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%231e293b'/><text x='50' y='55' fill='white' font-size='12' text-anchor='middle' font-family='sans-serif'>" + team.name.substring(0,3) + "</text></svg>";
+                
+                const logoUrl = team.logo || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%231e293b'/><text x='50' y='55' fill='white' font-size='12' text-anchor='middle' font-family='sans-serif'>" + (team.abbr || team.name.substring(0,3)).toUpperCase() + "</text></svg>";
+                document.getElementById(`${side}-logo`).src = logoUrl;
 
                 // Load and display players
                 const teamId = team.id;
@@ -1951,7 +1990,7 @@
 
                 // Update H2H Statistics and past matches panel
                 updateH2H();
-                renderPitchPlayers(side, teamId);
+                renderPitchPlayers(side, teamId, logoUrl);
             }
         }
 
