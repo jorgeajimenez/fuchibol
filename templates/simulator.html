@@ -1318,8 +1318,8 @@
                 <div class="pitch-ball" id="pitch-ball" style="top: 50%; left: 50%;"></div>
 
                 <!-- Interactive pins showing position transitions -->
-                <div class="pitch-player home-pin" id="pitch-home-pin" style="top: 50%; left: 35%;">H</div>
-                <div class="pitch-player away-pin" id="pitch-away-pin" style="top: 50%; left: 65%;">A</div>
+                <div class="pitch-player home-pin" id="pitch-home-pin" style="top: 50%; left: 35%; display: none;">H</div>
+                <div class="pitch-player away-pin" id="pitch-away-pin" style="top: 50%; left: 65%; display: none;">A</div>
 
                 <div class="possession-banner">
                     <div class="possession-dot" id="possession-dot"></div>
@@ -1345,6 +1345,13 @@
                             <option value="10">10m</option>
                             <option value="5">5m</option>
                         </select>
+                    </div>
+                    <div class="input-group" style="width: 120px;">
+                        <label>Ambient Crowd</label>
+                        <div style="display: flex; align-items: center; gap: 6px; height: 32px;">
+                            <input type="checkbox" id="crowd-noise-toggle" checked onchange="toggleCrowdNoise()" style="width: 16px; height: 16px; accent-color: var(--accent-gold); cursor: pointer;">
+                            <span style="font-size: 0.8rem; color: var(--text-dim);" id="crowd-toggle-text">Active</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1497,8 +1504,21 @@
         // Fuchibol Sound Engine using Web Audio API
         let audioCtx = null;
         let isAudioEnabled = false;
+        let isCrowdNoiseEnabled = true;
         let crowdNode = null;
         let crowdFilter = null;
+        let crowdGainNode = null;
+
+        function toggleCrowdNoise() {
+            const toggle = document.getElementById('crowd-noise-toggle');
+            isCrowdNoiseEnabled = toggle.checked;
+            document.getElementById('crowd-toggle-text').textContent = isCrowdNoiseEnabled ? "Active" : "Muted";
+            
+            if (audioCtx && crowdGainNode) {
+                const targetGain = isCrowdNoiseEnabled ? 0.08 : 0.0;
+                crowdGainNode.gain.linearRampToValueAtTime(targetGain, audioCtx.currentTime + 0.5);
+            }
+        }
 
         function initAudio() {
             if (audioCtx) {
@@ -1553,12 +1573,13 @@
                 crowdFilter.type = 'lowpass';
                 crowdFilter.frequency.setValueAtTime(350, audioCtx.currentTime); // Low mumble
 
-                const crowdGain = audioCtx.createGain();
-                crowdGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                crowdGainNode = audioCtx.createGain();
+                const initialGain = isCrowdNoiseEnabled ? 0.08 : 0.0;
+                crowdGainNode.gain.setValueAtTime(initialGain, audioCtx.currentTime);
 
                 crowdNode.connect(crowdFilter);
-                crowdFilter.connect(crowdGain);
-                crowdGain.connect(audioCtx.destination);
+                crowdFilter.connect(crowdGainNode);
+                crowdGainNode.connect(audioCtx.destination);
                 crowdNode.start(0);
 
                 // Play a starting whistle!
@@ -1589,7 +1610,7 @@
         }
 
         function playCrowdSound() {
-            if (crowdFilter) {
+            if (crowdFilter && isCrowdNoiseEnabled) {
                 crowdFilter.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 1);
             }
         }
@@ -1598,9 +1619,14 @@
             if (!audioCtx || !isAudioEnabled) return;
             try {
                 // Ramp up crowd volume and pitch
-                if (crowdFilter) {
+                if (crowdFilter && isCrowdNoiseEnabled) {
                     crowdFilter.frequency.setValueAtTime(1200, audioCtx.currentTime);
                     crowdFilter.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 5);
+                }
+                if (crowdGainNode && isCrowdNoiseEnabled) {
+                    crowdGainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                    crowdGainNode.gain.linearRampToValueAtTime(0.35, audioCtx.currentTime + 0.3);
+                    crowdGainNode.gain.exponentialRampToValueAtTime(0.08, audioCtx.currentTime + 4.0);
                 }
 
                 // Add synthetic explosion/roar
@@ -1649,6 +1675,80 @@
             const list = playerFallbackPool[teamAbbr];
             if (list && list[index % list.length]) return list[index % list.length];
             return `${teamAbbr} ${genericNames[index % genericNames.length]}`;
+        }
+
+        // 11 Players Formations and dynamic pitch renderer
+        const TEAM_FORMATIONS = {
+            home: [
+                { pos: "GK", top: 50, left: 8 },
+                { pos: "RB", top: 20, left: 22 },
+                { pos: "RCB", top: 38, left: 20 },
+                { pos: "LCB", top: 62, left: 20 },
+                { pos: "LB", top: 80, left: 22 },
+                { pos: "DM", top: 50, left: 32 },
+                { pos: "RM", top: 25, left: 42 },
+                { pos: "LM", top: 75, left: 42 },
+                { pos: "RW", top: 20, left: 58 },
+                { pos: "CF", top: 50, left: 60 },
+                { pos: "LW", top: 80, left: 58 }
+            ],
+            away: [
+                { pos: "GK", top: 50, left: 92 },
+                { pos: "LB", top: 20, left: 78 },
+                { pos: "LCB", top: 38, left: 80 },
+                { pos: "RCB", top: 62, left: 80 },
+                { pos: "RB", top: 80, left: 78 },
+                { pos: "DM", top: 50, left: 68 },
+                { pos: "LM", top: 25, left: 58 },
+                { pos: "RM", top: 75, left: 58 },
+                { pos: "LW", top: 20, left: 42 },
+                { pos: "CF", top: 50, left: 40 },
+                { pos: "RW", top: 80, left: 42 }
+            ]
+        };
+
+        function renderPitchPlayers(side, teamId) {
+            // Remove existing pins for this side
+            document.querySelectorAll(`.pitch-player.${side}-pin-dynamic`).forEach(el => el.remove());
+
+            const roster = playersDb[teamId] || [];
+            const formation = TEAM_FORMATIONS[side];
+            const pitchContainer = document.querySelector('.pitch-container');
+            const teamAbbr = document.getElementById(`${side}-abbr`).textContent;
+
+            formation.forEach((fPos, idx) => {
+                const playerEl = document.createElement('div');
+                playerEl.className = `pitch-player ${side}-pin ${side}-pin-dynamic`;
+                playerEl.id = `pitch-${side}-player-${idx}`;
+                
+                // Match with a roster player if available, otherwise use fallback pool
+                let pName = "";
+                let pJersey = "";
+                
+                if (roster.length > 0) {
+                    const rosterPlayer = roster[idx % roster.length];
+                    pName = rosterPlayer.name;
+                    pJersey = rosterPlayer.jersey || (idx + 1);
+                } else {
+                    const fallbackList = playerFallbackPool[teamAbbr] || [];
+                    pName = fallbackList[idx % (fallbackList.length || 1)] || `${teamAbbr} Player ${idx + 1}`;
+                    pJersey = idx + 1;
+                }
+                
+                playerEl.textContent = pJersey;
+                playerEl.title = `${pName} (${fPos.pos})`;
+                
+                // Style/position initially
+                playerEl.style.top = `${fPos.top}%`;
+                playerEl.style.left = `${fPos.left}%`;
+                
+                // Save base coordinates on the element for animation
+                playerEl.dataset.baseTop = fPos.top;
+                playerEl.dataset.baseLeft = fPos.left;
+                playerEl.dataset.posType = fPos.pos;
+
+                pitchContainer.appendChild(playerEl);
+            });
         }
 
         // Sim Constants
@@ -1851,6 +1951,7 @@
 
                 // Update H2H Statistics and past matches panel
                 updateH2H();
+                renderPitchPlayers(side, teamId);
             }
         }
 
@@ -2121,37 +2222,70 @@
         }
 
         function animatePlayersOnPitch() {
-            const homePin = document.getElementById('pitch-home-pin');
-            const awayPin = document.getElementById('pitch-away-pin');
+            // Get ball position
+            const ballPos = matchState.ballPosition; // home_goal, home_def, midfield, away_def, away_goal
             
-            let homeLeft = 35;
-            let awayLeft = 65;
+            // Define team shifts based on ball position
+            // All players shift slightly towards the ball to defend or attack
+            let homeShiftX = 0;
+            let awayShiftX = 0;
 
-            if (matchState.ballPosition === 'home_def') {
-                homeLeft = 18;
-                awayLeft = 40;
-            } else if (matchState.ballPosition === 'away_def') {
-                homeLeft = 60;
-                awayLeft = 82;
-            } else if (matchState.ballPosition === 'midfield') {
-                homeLeft = 35;
-                awayLeft = 65;
-            } else if (matchState.ballPosition === 'home_goal') {
-                homeLeft = 10;
-                awayLeft = 25;
-            } else if (matchState.ballPosition === 'away_goal') {
-                homeLeft = 75;
-                awayLeft = 90;
+            if (ballPos === 'home_goal') {
+                homeShiftX = -5;
+                awayShiftX = -15;
+            } else if (ballPos === 'home_def') {
+                homeShiftX = -3;
+                awayShiftX = -10;
+            } else if (ballPos === 'midfield') {
+                homeShiftX = 0;
+                awayShiftX = 0;
+            } else if (ballPos === 'away_def') {
+                homeShiftX = 10;
+                awayShiftX = 3;
+            } else if (ballPos === 'away_goal') {
+                homeShiftX = 15;
+                awayShiftX = 5;
             }
 
-            const jitterYHome = 50 + (Math.sin(Date.now() / 600) * 12);
-            const jitterYAway = 50 + (Math.cos(Date.now() / 600) * 12);
+            // Animate Home Players
+            document.querySelectorAll('.pitch-player.home-pin-dynamic').forEach((playerEl, idx) => {
+                const baseLeft = parseFloat(playerEl.dataset.baseLeft) || 35;
+                const baseTop = parseFloat(playerEl.dataset.baseTop) || 50;
+                
+                // GK stays in goal, others shift
+                const isGK = playerEl.dataset.posType === 'GK';
+                const finalShiftX = isGK ? homeShiftX * 0.2 : homeShiftX;
+                
+                // Add some natural-looking movement/jitter
+                const jitterX = Math.sin((Date.now() / 800) + idx) * 1.5;
+                const jitterY = Math.cos((Date.now() / 800) + idx) * 2;
 
-            homePin.style.left = `${homeLeft}%`;
-            homePin.style.top = `${jitterYHome}%`;
-            
-            awayPin.style.left = `${awayLeft}%`;
-            awayPin.style.top = `${jitterYAway}%`;
+                playerEl.style.left = `${Math.max(4, Math.min(96, baseLeft + finalShiftX + jitterX))}%`;
+                playerEl.style.top = `${Math.max(4, Math.min(96, baseTop + jitterY))}%`;
+            });
+
+            // Animate Away Players
+            document.querySelectorAll('.pitch-player.away-pin-dynamic').forEach((playerEl, idx) => {
+                const baseLeft = parseFloat(playerEl.dataset.baseLeft) || 65;
+                const baseTop = parseFloat(playerEl.dataset.baseTop) || 50;
+                
+                const isGK = playerEl.dataset.posType === 'GK';
+                const finalShiftX = isGK ? awayShiftX * 0.2 : awayShiftX;
+                
+                const jitterX = Math.cos((Date.now() / 800) + idx) * 1.5;
+                const jitterY = Math.sin((Date.now() / 800) + idx) * 2;
+
+                playerEl.style.left = `${Math.max(4, Math.min(96, baseLeft + finalShiftX + jitterX))}%`;
+                playerEl.style.top = `${Math.max(4, Math.min(96, baseTop + jitterY))}%`;
+            });
+
+            // Keep reference updates to legacy pins so no other code throws exceptions
+            const homePin = document.getElementById('pitch-home-pin');
+            const awayPin = document.getElementById('pitch-away-pin');
+            if (homePin && awayPin) {
+                homePin.style.left = `${35 + homeShiftX}%`;
+                awayPin.style.left = `${65 + awayShiftX}%`;
+            }
 
             // Display active possession text
             const homeAbbr = document.getElementById('home-abbr').textContent;
