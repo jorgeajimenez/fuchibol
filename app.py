@@ -4,10 +4,12 @@ from flask import Flask, jsonify, render_template, send_from_directory
 app = Flask(__name__)
 
 @app.route("/")
+@app.route("/index.html")
 def index():
     return render_template("index.html")
 
 @app.route("/simulator")
+@app.route("/simulator.html")
 def simulator():
     return render_template("simulator.html")
 

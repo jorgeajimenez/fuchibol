@@ -1106,8 +1106,8 @@
             </div>
         </div>
         <div class="controls">
-            <button onclick="location.href='/?view=circular'" class="btn-tab" id="tab-circular">Circular Bracket</button>
-            <button onclick="location.href='/?view=groups'" class="btn-tab" id="tab-groups">Group Stage</button>
+            <button onclick="location.href='index.html?view=circular'" class="btn-tab" id="tab-circular">Circular Bracket</button>
+            <button onclick="location.href='index.html?view=groups'" class="btn-tab" id="tab-groups">Group Stage</button>
             <button class="btn-tab active" id="tab-simulator">Match Simulator</button>
             
             <button onclick="initAudio()" class="sound-toggle-btn" id="sound-btn" title="Enable Atmospheric Crowd Noise">
@@ -1660,6 +1660,11 @@
             away_goal: { top: "50%", left: "95%" }
         };
 
+        // Inlined static data fallbacks for serverless deployments (docs/)
+        let inlineTeams = /*INLINED_TEAMS_FALLBACK*/ null;
+        let inlinePlayers = /*INLINED_PLAYERS_FALLBACK*/ null;
+        let inlineMatches = /*INLINED_MATCHES_FALLBACK*/ null;
+
         // Live Databases
         let allTeams = [];
         let playersDb = {};
@@ -1681,12 +1686,12 @@
 
         // Fetch team list, players and previous matches from API
         window.addEventListener('DOMContentLoaded', () => {
+            const pTeams = inlineTeams ? Promise.resolve(inlineTeams) : fetch('/api/data').then(res => res.json()).catch(() => inlineTeams || []);
+            const pPlayers = inlinePlayers ? Promise.resolve(inlinePlayers) : fetch('/api/players').then(res => res.json()).catch(() => inlinePlayers || {});
+            const pMatches = inlineMatches ? Promise.resolve(inlineMatches) : fetch('/api/previous_matches').then(res => res.json()).catch(() => inlineMatches || []);
+
             // Load essential databases in parallel
-            Promise.all([
-                fetch('/api/data').then(res => res.json()),
-                fetch('/api/players').then(res => res.json()),
-                fetch('/api/previous_matches').then(res => res.json())
-            ])
+            Promise.all([pTeams, pPlayers, pMatches])
             .then(([teamsData, playersData, matchesData]) => {
                 playersDb = playersData;
                 previousMatches = matchesData;

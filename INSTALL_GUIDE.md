@@ -24,3 +24,25 @@ A highly-premium, state-of-the-art Flask application featuring an interactive ci
 3. **Open Browser**:
    Navigate to **[http://127.0.0.1:5001](http://127.0.0.1:5001)**
 
+## Static Compilation & Publishing (GitHub Pages)
+
+The project includes a static compiler that produces a fully serverless site designed to run in `/docs` (configured for GitHub Pages deployment):
+
+1. **Compile**:
+   ```bash
+   bash publish.sh
+   ```
+   This generates:
+   - `docs/index.html` (with tournament scoreboard data fully inlined)
+   - `docs/simulator.html` (with team, player, and head-to-head matches databases fully inlined)
+   - `docs/holland_lop.jpg` (the custom local Netherlands logo replacement)
+   - `docs/.nojekyll` (disables GitHub Pages' default Jekyll builds for fast assets)
+
+2. **Deploy**:
+   Commit the updated `/docs` directory and push to the remote branch:
+   ```bash
+   git add docs/
+   git commit -m "Build and compile static tournament visualizer and simulator for GitHub Pages"
+   git push origin main
+   ```
+
