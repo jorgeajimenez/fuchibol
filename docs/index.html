@@ -3880,13 +3880,78 @@
                 }
 
                 // 3. Automatically populate advanced rounds based on actual completed data from API
-                rawEvents.forEach(e => {
-                    const stage = e.stage;
-                    if (stage === 'round-of-16') {
-                        // Find match pairs
-                        // We can also let the user predict if not completed
-                    }
+                const isCompleted = (status) => {
+                    return status === 'STATUS_FULL_TIME' || status === 'STATUS_FINAL_PEN' || status === 'STATUS_FINAL_AET' || (status && status.startsWith('STATUS_FINAL'));
+                };
+
+                const findTeamIndexInRound = (roundArray, team) => {
+                    return roundArray.findIndex(t => t && (t.name === team.name || t.abbr === team.abbr));
+                };
+
+                const stages = [
+                    { name: 'round-of-16', sourceRound: 'round1', targetRound: 'round2' },
+                    { name: 'quarterfinals', sourceRound: 'round2', targetRound: 'round3' },
+                    { name: 'semifinals', sourceRound: 'round3', targetRound: 'round4' }
+                ];
+
+                stages.forEach(stageCfg => {
+                    const stageMatches = rawEvents.filter(e => e.stage === stageCfg.name);
+                    stageMatches.forEach(match => {
+                        if (match.teams && match.teams.length >= 2) {
+                            const t1 = match.teams[0];
+                            const t2 = match.teams[1];
+                            const teamA = { name: t1.name, abbr: t1.abbr, logo: t1.logo || fallbackSVG };
+                            const teamB = { name: t2.name, abbr: t2.abbr, logo: t2.logo || fallbackSVG };
+
+                            let idxA = findTeamIndexInRound(bracketState[stageCfg.sourceRound], teamA);
+                            let idxB = findTeamIndexInRound(bracketState[stageCfg.sourceRound], teamB);
+
+                            let sourceIdx = idxA !== -1 ? idxA : idxB;
+                            if (sourceIdx !== -1) {
+                                const targetIdx = Math.floor(sourceIdx / 2);
+                                const pairStart = targetIdx * 2;
+                                if (!bracketState[stageCfg.sourceRound][pairStart]) {
+                                    bracketState[stageCfg.sourceRound][pairStart] = idxA !== -1 ? teamA : teamB;
+                                }
+                                if (!bracketState[stageCfg.sourceRound][pairStart + 1]) {
+                                    bracketState[stageCfg.sourceRound][pairStart + 1] = idxA !== -1 ? teamB : teamA;
+                                }
+
+                                if (isCompleted(match.status)) {
+                                    const winnerObj = t1.winner ? teamA : (t2.winner ? teamB : null);
+                                    if (winnerObj) {
+                                        bracketState[stageCfg.targetRound][targetIdx] = winnerObj;
+                                    }
+                                }
+                            }
+                        }
+                    });
                 });
+
+                const finalMatch = rawEvents.find(e => e.stage === 'final' || e.stage === 'final-stage');
+                if (finalMatch && finalMatch.teams && finalMatch.teams.length >= 2) {
+                    const t1 = finalMatch.teams[0];
+                    const t2 = finalMatch.teams[1];
+                    const teamA = { name: t1.name, abbr: t1.abbr, logo: t1.logo || fallbackSVG };
+                    const teamB = { name: t2.name, abbr: t2.abbr, logo: t2.logo || fallbackSVG };
+
+                    let idxA = findTeamIndexInRound(bracketState.round4, teamA);
+                    let idxB = findTeamIndexInRound(bracketState.round4, teamB);
+                    let sourceIdx = idxA !== -1 ? idxA : idxB;
+
+                    if (sourceIdx !== -1) {
+                        if (!bracketState.round4[0]) bracketState.round4[0] = idxA !== -1 ? teamA : teamB;
+                        if (!bracketState.round4[1]) bracketState.round4[1] = idxA !== -1 ? teamB : teamA;
+
+                        if (isCompleted(finalMatch.status)) {
+                            const winnerObj = t1.winner ? teamA : (t2.winner ? teamB : null);
+                            if (winnerObj) {
+                                bracketState.champion = winnerObj;
+                                document.getElementById('champ-name').textContent = winnerObj.name;
+                            }
+                        }
+                    }
+                }
 
             } catch (err) {
                 console.error("Error processing scoreboard data:", err);
