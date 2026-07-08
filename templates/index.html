@@ -1165,7 +1165,7 @@
                         bracketState.round0[2 * i + 1] = teamB;
 
                         // Automatically advance completed match winner
-                        if (match.status === 'STATUS_FULL_TIME' || match.status === 'STATUS_FINAL_PEN') {
+                        if (match.status === 'STATUS_FULL_TIME' || match.status === 'STATUS_FINAL_PEN' || match.status === 'STATUS_FINAL_AET' || (match.status && match.status.startsWith('STATUS_FINAL'))) {
                             const winnerObj = t1.winner ? teamA : (t2.winner ? teamB : null);
                             if (winnerObj) {
                                 bracketState.round1[i] = winnerObj;
