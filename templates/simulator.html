@@ -112,12 +112,12 @@
         .workspace-grid {
             flex: 1;
             display: grid;
-            grid-template-columns: 380px 1fr 380px;
+            grid-template-columns: 340px 1fr 380px;
             gap: 20px;
-            padding: 20px;
-            max-width: 1800px;
+            padding: 15px 20px;
+            max-width: 100%;
             margin: 0 auto;
-            width: calc(100% - 40px);
+            width: 100%;
             box-sizing: border-box;
         }
 
@@ -138,8 +138,11 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            height: fit-content;
+            height: calc(100vh - 120px);
+            min-height: 750px;
+            overflow-y: auto;
             transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            box-sizing: border-box;
         }
 
         .panel:hover {
@@ -607,7 +610,6 @@
         /* Commentary Feed Panel */
         .commentary-panel {
             grid-column: 3;
-            height: 650px;
             display: flex;
             flex-direction: column;
         }
@@ -615,7 +617,6 @@
         @media (max-width: 1200px) {
             .commentary-panel {
                 grid-column: auto;
-                height: 450px;
             }
         }
 
@@ -2260,70 +2261,319 @@
             }
         }
 
-        function animatePlayersOnPitch() {
-            // Get ball position
-            const ballPos = matchState.ballPosition; // home_goal, home_def, midfield, away_def, away_goal
-            
-            // Define team shifts based on ball position
-            // All players shift slightly towards the ball to defend or attack
-            let homeShiftX = 0;
-            let awayShiftX = 0;
+        let simBall = {
+            x: 50,
+            y: 50,
+            vx: 0,
+            vy: 0,
+            ownerTeam: null,
+            ownerIdx: -1,
+            state: 'normal', // 'normal', 'passing', 'shooting'
+            targetX: 50,
+            targetY: 50,
+            lastTouchTeam: 'home'
+        };
 
-            if (ballPos === 'home_goal') {
-                homeShiftX = -5;
-                awayShiftX = -15;
-            } else if (ballPos === 'home_def') {
-                homeShiftX = -3;
-                awayShiftX = -10;
-            } else if (ballPos === 'midfield') {
-                homeShiftX = 0;
-                awayShiftX = 0;
-            } else if (ballPos === 'away_def') {
-                homeShiftX = 10;
-                awayShiftX = 3;
-            } else if (ballPos === 'away_goal') {
-                homeShiftX = 15;
-                awayShiftX = 5;
+        let simPlayers = [];
+
+        function setupSimPlayers() {
+            simPlayers = [];
+            
+            // Home team (blue)
+            document.querySelectorAll('.pitch-player.home-pin-dynamic').forEach((el, idx) => {
+                const baseLeft = parseFloat(el.dataset.baseLeft) || 35;
+                const baseTop = parseFloat(el.dataset.baseTop) || 50;
+                simPlayers.push({
+                    el: el,
+                    side: 'home',
+                    idx: idx,
+                    x: baseLeft,
+                    y: baseTop,
+                    baseX: baseLeft,
+                    baseY: baseTop,
+                    posType: el.dataset.posType || 'MID',
+                    name: el.title.split(' (')[0] || `Home Player ${idx+1}`,
+                    speed: 0.15 + Math.random() * 0.1,
+                    jersey: el.textContent
+                });
+            });
+            
+            // Away team (red)
+            document.querySelectorAll('.pitch-player.away-pin-dynamic').forEach((el, idx) => {
+                const baseLeft = parseFloat(el.dataset.baseLeft) || 65;
+                const baseTop = parseFloat(el.dataset.baseTop) || 50;
+                simPlayers.push({
+                    el: el,
+                    side: 'away',
+                    idx: idx,
+                    x: baseLeft,
+                    y: baseTop,
+                    baseX: baseLeft,
+                    baseY: baseTop,
+                    posType: el.dataset.posType || 'MID',
+                    name: el.title.split(' (')[0] || `Away Player ${idx+1}`,
+                    speed: 0.15 + Math.random() * 0.1,
+                    jersey: el.textContent
+                });
+            });
+        }
+
+        function animatePlayersOnPitch() {
+            if (simPlayers.length === 0) {
+                setupSimPlayers();
             }
 
-            // Animate Home Players
-            document.querySelectorAll('.pitch-player.home-pin-dynamic').forEach((playerEl, idx) => {
-                const baseLeft = parseFloat(playerEl.dataset.baseLeft) || 35;
-                const baseTop = parseFloat(playerEl.dataset.baseTop) || 50;
-                
-                // GK stays in goal, others shift
-                const isGK = playerEl.dataset.posType === 'GK';
-                const finalShiftX = isGK ? homeShiftX * 0.2 : homeShiftX;
-                
-                // Add some natural-looking movement/jitter
-                const jitterX = Math.sin((Date.now() / 800) + idx) * 1.5;
-                const jitterY = Math.cos((Date.now() / 800) + idx) * 2;
+            if (!matchState.isRunning) {
+                // Pre-match / paused: players do breathing jitter around their current/base positions
+                simPlayers.forEach((p, idx) => {
+                    const jitterX = Math.sin((Date.now() / 800) + idx) * 0.4;
+                    const jitterY = Math.cos((Date.now() / 800) + idx) * 0.5;
+                    p.x = p.baseX + jitterX;
+                    p.y = p.baseY + jitterY;
+                    
+                    p.el.style.left = `${p.x}%`;
+                    p.el.style.top = `${p.y}%`;
+                });
 
-                playerEl.style.left = `${Math.max(4, Math.min(96, baseLeft + finalShiftX + jitterX))}%`;
-                playerEl.style.top = `${Math.max(4, Math.min(96, baseTop + jitterY))}%`;
+                // Keep ball at center or its current coordinates
+                const ballEl = document.getElementById('pitch-ball');
+                if (ballEl) {
+                    ballEl.style.left = `${simBall.x}%`;
+                    ballEl.style.top = `${simBall.y}%`;
+                }
+                return;
+            }
+
+            // --- LIVE 2D AGENT PHYSICS MATCH ENGINE ---
+            
+            // 1. Kickoff / Possession check
+            if (simBall.ownerTeam === null && simBall.state === 'normal') {
+                // Find closest player to the ball to collect it
+                let closestPlayer = null;
+                let minDist = Infinity;
+                simPlayers.forEach(p => {
+                    const dist = Math.hypot(p.x - simBall.x, p.y - simBall.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestPlayer = p;
+                    }
+                });
+
+                if (closestPlayer && minDist < 2.0) {
+                    simBall.ownerTeam = closestPlayer.side;
+                    simBall.ownerIdx = closestPlayer.idx;
+                    simBall.lastTouchTeam = closestPlayer.side;
+                    matchState.possessor = closestPlayer.side;
+                }
+            }
+
+            // 2. Move Players based on state
+            const ballOwner = simBall.ownerTeam !== null ? 
+                simPlayers.find(p => p.side === simBall.ownerTeam && p.idx === simBall.ownerIdx) : null;
+
+            simPlayers.forEach(p => {
+                // Goalkeepers behavior
+                if (p.posType === 'GK') {
+                    // GK stays near their goal line, moving vertically to track the ball's Y coordinate
+                    const gkGoalX = p.side === 'home' ? 4 : 96;
+                    p.x += (gkGoalX - p.x) * 0.1;
+                    
+                    // Track ball Y but stay in the goalmouth (35% to 65%)
+                    const targetY = Math.max(35, Math.min(65, simBall.y));
+                    p.y += (targetY - p.y) * 0.08;
+                } 
+                // Field players behavior
+                else {
+                    if (ballOwner) {
+                        if (p === ballOwner) {
+                            // Ball owner dribbles toward opponent's goal
+                            const targetGoalX = p.side === 'home' ? 95 : 5;
+                            const targetGoalY = 50; // center of goal
+                            
+                            const dx = targetGoalX - p.x;
+                            const dy = targetGoalY - p.y;
+                            const dist = Math.hypot(dx, dy);
+                            
+                            // Move forward
+                            p.x += (dx / dist) * p.speed * 0.6;
+                            p.y += (dy / dist) * p.speed * 0.6;
+
+                            // Keep ball at player's feet
+                            simBall.x = p.x + (p.side === 'home' ? 1.2 : -1.5);
+                            simBall.y = p.y + 0.5;
+
+                            // Check shooting distance
+                            const shootDist = p.side === 'home' ? (95 - p.x) : (p.x - 5);
+                            if (shootDist < 25 && Math.random() < 0.02) {
+                                // SHOOT!
+                                simBall.ownerTeam = null;
+                                simBall.ownerIdx = -1;
+                                simBall.state = 'shooting';
+                                simBall.vx = p.side === 'home' ? 3.0 : -3.0;
+                                simBall.vy = ((50 + (Math.random() * 16 - 8)) - simBall.y) * 0.1;
+                                simBall.lastTouchTeam = p.side;
+                                
+                                matchState[`${p.side}Stats`].shots++;
+                                addCommentary(matchState.minute, `⚡ [Shot] ${p.name} fires a powerful shot towards goal!`, 'shot');
+                                updateStatsUI();
+                            } 
+                            // Check passing option if pressured or random
+                            else if (Math.random() < 0.015) {
+                                // PASS! Find teammate further upfield
+                                const teammates = simPlayers.filter(t => t.side === p.side && t !== p && t.posType !== 'GK');
+                                let bestOption = teammates[Math.floor(Math.random() * teammates.length)];
+                                
+                                if (bestOption) {
+                                    simBall.ownerTeam = null;
+                                    simBall.ownerIdx = -1;
+                                    simBall.state = 'passing';
+                                    simBall.targetX = bestOption.x;
+                                    simBall.targetY = bestOption.y;
+                                    simBall.lastTouchTeam = p.side;
+                                    
+                                    addCommentary(matchState.minute, `🏃 ${p.name} passes to ${bestOption.name}.`, 'normal');
+                                }
+                            }
+                        } else if (p.side === ballOwner.side) {
+                            // Teammate runs forward or into space supporting the attack
+                            const attackDir = p.side === 'home' ? 1 : -1;
+                            const targetX = Math.max(10, Math.min(90, p.baseX + attackDir * 15));
+                            const targetY = Math.max(10, Math.min(90, p.baseY + (simBall.y - p.baseY) * 0.4));
+                            
+                            p.x += (targetX - p.x) * p.speed * 0.4;
+                            p.y += (targetY - p.y) * p.speed * 0.4;
+                        } else {
+                            // Opponent defends: closest players run to ball owner to tackle, others track back
+                            const distToBall = Math.hypot(p.x - ballOwner.x, p.y - ballOwner.y);
+                            if (distToBall < 20) {
+                                // Pressure ball carrier
+                                const dx = ballOwner.x - p.x;
+                                const dy = ballOwner.y - p.y;
+                                p.x += (dx / distToBall) * p.speed * 0.8;
+                                p.y += (dy / distToBall) * p.speed * 0.8;
+
+                                // Attempt tackle
+                                if (distToBall < 1.8 && Math.random() < 0.1) {
+                                    // Steal ball!
+                                    simBall.ownerTeam = p.side;
+                                    simBall.ownerIdx = p.idx;
+                                    simBall.lastTouchTeam = p.side;
+                                    matchState.possessor = p.side;
+                                    addCommentary(matchState.minute, `🛡️ Great tackle by ${p.name} to win possession!`, 'normal');
+                                }
+                            } else {
+                                // Fallback/defensive shifting
+                                const targetX = Math.max(10, Math.min(90, p.baseX - (p.side === 'home' ? -8 : 8)));
+                                p.x += (targetX - p.x) * p.speed * 0.3;
+                                p.y += (p.baseY - p.y) * p.speed * 0.3;
+                            }
+                        }
+                    } else {
+                        // Loose ball: everyone runs toward the ball
+                        const distToBall = Math.hypot(p.x - simBall.x, p.y - simBall.y);
+                        if (distToBall < 30) {
+                            p.x += ((simBall.x - p.x) / distToBall) * p.speed * 0.8;
+                            p.y += ((simBall.y - p.y) / distToBall) * p.speed * 0.8;
+                        } else {
+                            p.x += (p.baseX - p.x) * p.speed * 0.3;
+                            p.y += (p.baseY - p.y) * p.speed * 0.3;
+                        }
+                    }
+                }
+
+                // Bound player positions to keep them inside the pitch beautifully
+                p.x = Math.max(2, Math.min(98, p.x));
+                p.y = Math.max(4, Math.min(96, p.y));
+
+                // Update DOM position
+                p.el.style.left = `${p.x}%`;
+                p.el.style.top = `${p.y}%`;
             });
 
-            // Animate Away Players
-            document.querySelectorAll('.pitch-player.away-pin-dynamic').forEach((playerEl, idx) => {
-                const baseLeft = parseFloat(playerEl.dataset.baseLeft) || 65;
-                const baseTop = parseFloat(playerEl.dataset.baseTop) || 50;
-                
-                const isGK = playerEl.dataset.posType === 'GK';
-                const finalShiftX = isGK ? awayShiftX * 0.2 : awayShiftX;
-                
-                const jitterX = Math.cos((Date.now() / 800) + idx) * 1.5;
-                const jitterY = Math.sin((Date.now() / 800) + idx) * 2;
+            // 3. Move Ball when in flight
+            if (simBall.ownerTeam === null) {
+                if (simBall.state === 'passing') {
+                    const dx = simBall.targetX - simBall.x;
+                    const dy = simBall.targetY - simBall.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 2.0) {
+                        simBall.state = 'normal';
+                    } else {
+                        simBall.x += (dx / dist) * 1.6;
+                        simBall.y += (dy / dist) * 1.6;
+                    }
+                } else if (simBall.state === 'shooting') {
+                    simBall.x += simBall.vx * 0.6;
+                    simBall.y += simBall.vy * 0.6;
 
-                playerEl.style.left = `${Math.max(4, Math.min(96, baseLeft + finalShiftX + jitterX))}%`;
-                playerEl.style.top = `${Math.max(4, Math.min(96, baseTop + jitterY))}%`;
-            });
+                    // Goalie save check
+                    const defendingSide = simBall.vx > 0 ? 'away' : 'home';
+                    const gk = simPlayers.find(p => p.side === defendingSide && p.posType === 'GK');
+                    if (gk) {
+                        const distToGK = Math.hypot(simBall.x - gk.x, simBall.y - gk.y);
+                        if (distToGK < 4.5 && Math.random() < 0.65) {
+                            // GK saves/catches the ball!
+                            simBall.ownerTeam = gk.side;
+                            simBall.ownerIdx = gk.idx;
+                            simBall.state = 'normal';
+                            simBall.vx = 0;
+                            simBall.vy = 0;
+                            
+                            matchState[`${gk.side === 'home' ? 'away' : 'home'}Stats`].onTarget++;
+                            addCommentary(matchState.minute, `🧤 Brilliant save by ${gk.name} to hold onto the shot!`, 'shot');
+                            updateStatsUI();
+                        }
+                    }
+
+                    // Goal check!
+                    if (simBall.x >= 98 || simBall.x <= 2) {
+                        if (simBall.y >= 38 && simBall.y <= 62) {
+                            // GOOOAL!
+                            const scoringSide = simBall.x >= 98 ? 'home' : 'away';
+                            // Pick a random player as the scorer for flavor, or the last attacker
+                            const lastTouchPlayer = simPlayers.find(p => p.side === scoringSide && p.posType !== 'GK' && p.idx === Math.floor(Math.random() * 11)) || { name: "Striker" };
+                            
+                            triggerGoal(matchState.minute, scoringSide, lastTouchPlayer.name);
+                            
+                            // Reset ball to center for kickoff
+                            simBall.x = 50;
+                            simBall.y = 50;
+                            simBall.vx = 0;
+                            simBall.vy = 0;
+                            simBall.ownerTeam = scoringSide === 'home' ? 'away' : 'home';
+                            simBall.ownerIdx = 5; // CF
+                            simBall.state = 'normal';
+                        } else {
+                            // Out for Goal Kick
+                            const sideWithGoalKick = simBall.x >= 98 ? 'away' : 'home';
+                            const gk = simPlayers.find(p => p.side === sideWithGoalKick && p.posType === 'GK');
+                            
+                            simBall.x = sideWithGoalKick === 'home' ? 5 : 95;
+                            simBall.y = 50;
+                            simBall.ownerTeam = sideWithGoalKick;
+                            simBall.ownerIdx = gk ? gk.idx : 0;
+                            simBall.state = 'normal';
+                            simBall.vx = 0;
+                            simBall.vy = 0;
+                            addCommentary(matchState.minute, `Goal kick for ${sideWithGoalKick === 'home' ? document.getElementById('home-abbr').textContent : document.getElementById('away-abbr').textContent}.`, 'normal');
+                        }
+                    }
+                }
+            }
 
             // Keep reference updates to legacy pins so no other code throws exceptions
             const homePin = document.getElementById('pitch-home-pin');
             const awayPin = document.getElementById('pitch-away-pin');
             if (homePin && awayPin) {
-                homePin.style.left = `${35 + homeShiftX}%`;
-                awayPin.style.left = `${65 + awayShiftX}%`;
+                homePin.style.left = `${simBall.x - 3}%`;
+                awayPin.style.left = `${simBall.x + 3}%`;
+            }
+
+            // Update Ball DOM element
+            const ballEl = document.getElementById('pitch-ball');
+            if (ballEl) {
+                ballEl.style.left = `${simBall.x}%`;
+                ballEl.style.top = `${simBall.y}%`;
             }
 
             // Display active possession text
@@ -2335,11 +2585,11 @@
             if (matchState.possessor === 'home') {
                 dot.style.background = 'var(--info-blue)';
                 dot.style.boxShadow = '0 0 8px var(--info-blue)';
-                text.textContent = `${homeAbbr} in Possession (${matchState.ballPosition.replace('_', ' ').toUpperCase()})`;
+                text.textContent = `${homeAbbr} in Possession (${simBall.x < 35 ? 'Defense' : simBall.x < 65 ? 'Midfield' : 'Attack'})`;
             } else {
                 dot.style.background = 'var(--danger-red)';
                 dot.style.boxShadow = '0 0 8px var(--danger-red)';
-                text.textContent = `${awayAbbr} in Possession (${matchState.ballPosition.replace('_', ' ').toUpperCase()})`;
+                text.textContent = `${awayAbbr} in Possession (${simBall.x < 35 ? 'Attack' : simBall.x < 65 ? 'Midfield' : 'Defense'})`;
             }
         }
 
